@@ -1,4 +1,6 @@
 # Funfair
+[![Build Status](https://travis-ci.org/kmamykin/funfair.png)](https://travis-ci.org/kmamykin/funfair)
+
 
 ...because its all queues!
 Funfair is an idiomatic wrapper on top of amqp-ruby gem implementing common messaging patterns.
