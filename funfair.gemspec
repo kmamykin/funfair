@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.version       = Funfair::VERSION
   spec.authors       = ["Kliment Mamykin"]
   spec.email         = ["kmamyk@gmail.com"]
-  spec.description   = %q{Funfair is an idiomatic wrapper on top of amqp-ruby gem implementing common messaging patterns.}
-  spec.summary       = %q{Funfair is an idiomatic wrapper on top of amqp-ruby gem implementing common messaging patterns.}
+  spec.description   = %q{Funfair is an idiomatic wrapper on top of amqp gem implementing common messaging patterns.}
+  spec.summary       = %q{Funfair is an idiomatic wrapper on top of amqp gem implementing common messaging patterns.}
   spec.homepage      = "https://github.com/kmamykin/funfair"
   spec.license       = "MIT"
 
