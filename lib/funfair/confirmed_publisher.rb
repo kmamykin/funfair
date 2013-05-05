@@ -3,10 +3,12 @@ module Funfair
   # http://www.rabbitmq.com/confirms.html
   # http://rubyamqp.info/articles/broker_specific_extensions/#publisher_confirms_publisher_acknowledgements
   # Inspired by https://gist.github.com/eliaslevy/3042381
-  class PubSubPublisher
-    include EventMachine::Deferrable
+  class ConfirmedPublisher
 
+    attr_reader :logger
     def initialize(session)
+      @logger = Funfair.logger
+      @on_channel_ready = EventMachine::Completion.new
       # schedule channel initialization once connection is available
       session.connected do |connection|
         obtain_channel_with_confirmations(connection)
@@ -14,11 +16,11 @@ module Funfair
     end
 
     def on_channel_ready(&block)
-      self.callback(&block)
+      @on_channel_ready.callback(&block)
     end
 
-    def publish(event_name, event_data = nil)
-      PublishRequest.new(self, event_name, event_data).tap do |request|
+    def publish(exchange_name, message_data = nil)
+      PublishRequest.new(self, exchange_name, message_data).tap do |request|
         track(request)
         request.publish
       end
@@ -33,27 +35,28 @@ module Funfair
           channel.auto_recovery = true
           # Publishing to this channel will need ack/nack confirmations from the brocker
           channel.on_error(&method(:handle_channel_error))
-          channel.confirm_select do
+          channel.confirm_select do # network round-trip
+            # once confirmed
             channel.on_ack(&method(:handle_ack))
             channel.on_nack(&method(:handle_nack))
-            self.succeed(channel)
+            @on_channel_ready.succeed(channel)
           end
         end
       end
     end
 
     def handle_ack(ack)
-      puts "ACK: tag=#{ack.delivery_tag}, mul=#{ack.multiple}"
+      logger.debug "ACK: tag=#{ack.delivery_tag}, mul=#{ack.multiple}"
       ack_requests(ack.delivery_tag.to_i, ack.multiple)
     end
 
     def handle_nack(nack)
-      puts "NACK: tag=#{nack.delivery_tag}, mul=#{nack.multiple}"
+      loger.debug "NACK: tag=#{nack.delivery_tag}, mul=#{nack.multiple}"
       nack_requests(nack.delivery_tag.to_i, nack.multiple, "NACK: tag=#{nack.delivery_tag}, mul=#{nack.multiple}")
     end
 
     def handle_channel_error(ch, channel_close)
-      puts "Channel-level exception on publishing channel: #{channel_close.reply_text}"
+      logger.error "Channel-level exception on publishing channel: #{channel_close.reply_text}"
       fail_requests("AMQP channel error #{channel_close.inspect}")
       fail("AMQP channel error #{channel_close.inspect}")
     end
@@ -92,5 +95,6 @@ module Funfair
     def awaiting_confirmation
       @awaiting_confirmation ||= []
     end
+
   end
 end

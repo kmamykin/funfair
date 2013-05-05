@@ -10,12 +10,12 @@ module Funfair
     # subscription_request = session.subscribe(exchange_name, queue_name, &consumer)
     # subscription_request.callback{}
     # subscription_request.errback{}
-    def subscribe(event_name, handler_id, &handler)
-      @subscribers << Subscriber.new(event_name, handler_id, handler)
+    def subscribe(exchange_name, queue_name, &handler)
+      @subscribers << Subscriber.new(exchange_name, queue_name, handler)
     end
 
-    def subscribe?(event_name, handler_id)
-      @subscribers.any? { |s| s.event_name == event_name && s.handler_id == handler_id }
+    def subscribe?(exchange_name, queue_name)
+      @subscribers.any? { |s| s.subscribed_to?(exchange_name, queue_name)}
     end
 
     def all_listening(&block)

@@ -4,6 +4,12 @@ describe Funfair do
   include EventedSpec::SpecHelper
   default_timeout 20
 
+  before :all do
+    Funfair.configure do |config|
+      #config.log_level = Logger::DEBUG
+    end
+  end
+
   let(:client) { Funfair::Client.new({}) }
 
   def event_name(n=nil)
@@ -32,10 +38,8 @@ describe Funfair do
         check_if_all_published = Proc.new do
           published += 1
           if published == number_of_requests
-            client.pubsub.delete_all do
-              client.disconnect do
-                done
-              end
+            client.disconnect do
+              done
             end
           end
         end
@@ -53,10 +57,8 @@ describe Funfair do
     it 'should subscribe and publish async' do
       em do
         client.pubsub.subscribe(event_name, subscriber_queue) do
-          client.pubsub.delete_all do
-            client.disconnect do
-              done
-            end
+          client.disconnect do
+            done
           end
         end
         client.pubsub.on_ready do
@@ -74,10 +76,8 @@ describe Funfair do
         check_if_all_received = Proc.new do |payload|
           received += 1
           if received == number_of_subscribers
-            client.pubsub.delete_all do
-              client.disconnect do
-                done
-              end
+            client.disconnect do
+              done
             end
           end
         end
@@ -101,10 +101,8 @@ describe Funfair do
         check_if_all_received = Proc.new do
           received += 1
           if received == number_of_publishers
-            client.pubsub.delete_all do
-              client.disconnect do
-                done
-              end
+            client.disconnect do
+              done
             end
           end
         end

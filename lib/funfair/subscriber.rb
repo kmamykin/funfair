@@ -1,19 +1,21 @@
 module Funfair
   class Subscriber
-    attr_reader :event_name, :handler_id, :handler
+    attr_reader :exchange_name, :queue_name, :handler
+    attr_reader :logger
 
-    def initialize(event_name, handler_id, handler)
-      @event_name, @handler_id, @handler = event_name, handler_id, handler
+    def initialize(exchange_name, queue_name, handler)
+      @exchange_name, @queue_name, @handler = exchange_name.to_s, queue_name.to_s, handler
+      @logger = Funfair.logger
     end
 
     def bind(channel, &block)
       EM.next_tick do
-        channel.fanout(event_name.to_s, :durable => true) do |exchange, declare_ok|
+        channel.fanout(exchange_name, :durable => true) do |exchange, declare_ok|
           @exchange = exchange
-          channel.queue(handler_id.to_s, :durable => true) do |queue, declare_ok| # durable queue
-            puts "Subscribing to #{event_name} with handler #{handler_id} on channel #{channel.id}"
+          channel.queue(queue_name, :durable => true) do |queue, declare_ok| # durable queue
+            logger.debug "Subscribing to #{exchange_name} with handler #{queue_name} on channel #{channel.id}"
             queue.bind(exchange) do |bind_ok|
-              puts "Bound to exchange #{exchange.name}"
+              logger.debug "Bound to exchange #{exchange.name}"
               @queue = queue
               block.call
             end
@@ -37,12 +39,16 @@ module Funfair
       @subscribed
     end
 
+    def subscribed_to?(exchange_name, queue_name)
+      self.exchange_name == exchange_name.to_s && self.queue_name == queue_name
+    end
+
     def delete(&block)
       EM.next_tick do
         #@exchange.delete
-        puts "Deleting queue #{@queue.name}..."
+        logger.debug "Deleting queue #{@queue.name}..."
         @queue.delete do |delete_ok|
-          puts "Deleted queue #{@queue.name} with #{delete_ok.message_count} messages"
+          logger.debug "Deleted queue #{@queue.name} with #{delete_ok.message_count} messages"
           @queue = nil
           block.call
         end

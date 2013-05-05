@@ -10,7 +10,7 @@ module Funfair
       Signal.trap "TERM", &method(:shutdown)
       Signal.trap "INT", &method(:shutdown)
       EM.run do
-        @client.subscribers.all_listening { puts "Started and Ready" }
+        @client.pubsub.on_ready { puts "Started and Ready" }
       end
     end
 

@@ -1,7 +1,7 @@
 module Funfair
   # Represents an asynchronous request to publish event to an exchange.
   # Usage:
-  # request = publisher.publish(event_name, event_data)
+  # request = publisher.publish(exchange_name, message_data)
   # request.callback { puts "Succeeded" }
   # request.errback { |error_message| puts error_message }
   # See: http://eventmachine.rubyforge.org/docs/DEFERRABLES.html
@@ -10,18 +10,18 @@ module Funfair
 
     attr_accessor :tag
 
-    def initialize(publisher, event_name, event_data)
-      @publisher, @event_name, @event_date = publisher, event_name, event_data
+    def initialize(publisher, exchange_name, message_data)
+      @publisher, @exchange_name, @event_date = publisher, exchange_name.to_s, message_data
       @timeout = 30 # in sec
     end
 
     def publish
       @publisher.on_channel_ready do |channel|
         EM.next_tick do
-          channel.fanout(@event_name.to_s, :durable => true) do |exchange|
+          channel.fanout(@exchange_name, :durable => true) do |exchange|
             # publisher_index should have been incremented by exchange.publish in channel after_publish callback
             self.tag = channel.publisher_index + 1
-            exchange.publish(@event_data, {:persistent => true}) do
+            exchange.publish(@message_data, {:persistent => true}) do
               # this is executed on EM.next_tick
               # and just means that AMQP passed the message to OS, no other guarantees made at this point
 

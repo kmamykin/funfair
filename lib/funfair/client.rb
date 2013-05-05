@@ -1,8 +1,11 @@
 module Funfair
   class Client
 
+    attr_reader :logger
+
     def initialize(options)
       @options = options
+      @logger = Funfair.logger
       @connected = EventMachine::Completion.new
     end
 
@@ -20,7 +23,7 @@ module Funfair
       unless @started_connection
         @started_connection = true
         ::AMQP::Utilities::EventLoopHelper.run do
-          puts "CONNECTING TO AMQP SERVER ..."
+          logger.info "CONNECTING TO AMQP SERVER ..."
           ::AMQP.connection = ::AMQP.connect(@options.merge({
               :on_tcp_connection_failure => method(:on_tcp_connection_failure),
               :on_possible_authentication_failure => method(:on_possible_authentication_failure)
@@ -36,10 +39,10 @@ module Funfair
     end
 
     def disconnect(&block)
-      puts "Scheduling disconnect..."
       EM.next_tick do
-        puts "Disconnecting"
+        logger.info "Disconnecting"
         ::AMQP.stop do
+          logger.info "AMQP stopped"
           block.call
         end
       end
@@ -63,14 +66,20 @@ module Funfair
       end
     end
 
+    def reconnection_period
+      5 # in seconds
+    end
+
     def on_tcp_connection_failure
-      puts "Can not establish connection. TCP connection failure."
-      @connected.fail(:tcp_failure, "Can not establish connection. TCP connection failure.")
+      failure = "Can not establish connection. TCP connection failure."
+      logger.fatal failure
+      @connected.fail :tcp_failure, failure
     end
 
     def on_possible_authentication_failure
-      puts "Can not establish connection. Possible authentication failure."
-      @connected.fail(:auth_failure, "Can not establish connection. Possible authentication failure.")
+      failure  ="Can not establish connection. Possible authentication failure."
+      logger.fatal failure
+      @connected.fail :auth_failure, failure
     end
 
     def on_connection_error(connection, connection_close)
@@ -79,26 +88,17 @@ module Funfair
       # and must be closed. In any case, your application should be prepared to handle this kind of error.
       # To define a handler, use AMQP::Session#on_error method that takes a callback and yields two arguments to it
       # when a connection-level exception happens:
-      puts "Handling a connection-level exception."
-      puts
-      puts "AMQP class id : #{connection_close.class_id}"
-      puts "AMQP method id: #{connection_close.method_id}"
-      puts "Status code   : #{connection_close.reply_code}"
-      puts "Error message : #{connection_close.reply_text}"
+
       # Handling graceful shutdown
-      puts "[connection.close] Reply code = #{connection_close.reply_code}, reply text = #{connection_close.reply_text}"
+      logger.error "Connection error. Reply code = #{connection_close.reply_code}, reply text = #{connection_close.reply_text}"
       if connection_close.reply_code == 320
-        puts "[connection.close] Setting up a periodic reconnection timer..."
+        logger.info "Detected server shutdown. Setting up a periodic reconnection timer..."
         # every 30 seconds
         connection.periodically_reconnect(30)
+      else
+        logger.fatal "Connection error. Bailing out!"
+        raise connection_close.reply_text
       end
-
-      raise connection_close.reply_text
-    end
-
-    def on_channel_error(channel, channel_close)
-      puts "Channel-level exception on subscribing channel: #{channel_close.reply_text}"
-      # handle it or throw
     end
 
     def on_tcp_connection_loss(connection, settings)
@@ -107,7 +107,8 @@ module Funfair
       # so there will be subsequent failures. To react to those see
       # #on_connection_interruption
       # reconnect in 2 seconds, without enforcement
-      connection.reconnect(false, 2)
+      logger.warn "TCP connection loss. Reconnecting..."
+      connection.periodically_reconnect(reconnection_period)
     end
 
     def on_connection_interruption(connection)
@@ -118,24 +119,24 @@ module Funfair
       # or use AMQP::Session#reconnect_to to connect to a different one.
       # For some applications it is OK to simply exit and wait to be restarted at a later point in time,
       # for example, by a process monitoring system like Nagios or Monit.
-      puts "Connection detected connection interruption"
-      connection.reconnect(false, 2)
+      logger.warn "Connection detected connection interruption. Reconnecting..."
+      connection.periodically_reconnect(reconnection_period)
     end
 
     def log_connection_success(connection)
-      puts "Connected to #{connection.hostname}:#{connection.port}/#{connection.vhost}"
-      puts "Client properties:"
-      puts connection.client_properties.inspect
-      puts "Server properties:"
-      puts connection.server_properties.inspect
-      puts "Server capabilities:"
-      puts connection.server_capabilities.inspect
-      puts "Broker product: #{connection.broker.product}, version: #{connection.broker.version}"
-      puts "Connected to RabbitMQ? #{connection.broker.rabbitmq?}"
-      puts "Broker supports publisher confirms? #{connection.broker.supports_publisher_confirmations?}"
-      puts "Broker supports basic.nack? #{connection.broker.supports_basic_nack?}"
-      puts "Broker supports consumer cancel notifications? #{connection.broker.supports_consumer_cancel_notifications?}"
-      puts "Broker supports exchange-to-exchange bindings? #{connection.broker.supports_exchange_to_exchange_bindings?}"
+      logger.info "Connected to #{connection.hostname}:#{connection.port}/#{connection.vhost}"
+      logger.debug "Client properties:"
+      logger.debug connection.client_properties.inspect
+      logger.debug "Server properties:"
+      logger.debug connection.server_properties.inspect
+      logger.debug "Server capabilities:"
+      logger.debug connection.server_capabilities.inspect
+      logger.debug "Broker product: #{connection.broker.product}, version: #{connection.broker.version}"
+      logger.debug "Connected to RabbitMQ? #{connection.broker.rabbitmq?}"
+      logger.debug "Broker supports publisher confirms? #{connection.broker.supports_publisher_confirmations?}"
+      logger.debug "Broker supports basic.nack? #{connection.broker.supports_basic_nack?}"
+      logger.debug "Broker supports consumer cancel notifications? #{connection.broker.supports_consumer_cancel_notifications?}"
+      logger.debug "Broker supports exchange-to-exchange bindings? #{connection.broker.supports_exchange_to_exchange_bindings?}"
     end
 
   end

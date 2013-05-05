@@ -25,7 +25,7 @@ module Funfair
     protected
 
     def publisher
-      @publisher ||= PubSubPublisher.new(@client)
+      @publisher ||= ConfirmedPublisher.new(@client)
     end
 
     def subscribers
