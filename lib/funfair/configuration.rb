@@ -8,6 +8,7 @@ module Funfair
       self.logger = Logger.new(STDOUT)
       self.log_level = Logger::INFO
       self.connection_options_or_string = {}
+      self.subscribers = []
     end
 
     def log_level=(level)

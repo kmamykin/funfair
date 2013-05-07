@@ -1,63 +1,77 @@
 module Funfair
   module PubSub
-    class Subscriber
+    class Subscription
       attr_reader :exchange_name, :queue_name, :handler
       attr_reader :logger
 
       def initialize(exchange_name, queue_name, handler)
         @exchange_name, @queue_name, @handler = exchange_name.to_s, queue_name.to_s, handler
+        @on_declared = EventMachine::Completion.new
+        @on_consuming = EventMachine::Completion.new
+        @consuming = false
+        @declared = false
         @logger = Funfair.logger
       end
 
-      def bind(channel, &block)
+      def on_declared(&block)
+        @on_declared.callback(&block)
+      end
+
+      def on_consuming(&block)
+        @on_consuming.callback(&block)
+      end
+
+      def consume(channel)
+        @on_declared.callback{|exchange, queue| self.subscribe(queue) }
         EM.next_tick do
           channel.fanout(exchange_name, :durable => true) do |exchange, declare_ok|
-            @exchange = exchange
             channel.queue(queue_name, :durable => true) do |queue, declare_ok| # durable queue
               logger.debug "Subscribing to #{exchange_name} with handler #{queue_name} on channel #{channel.id}"
               queue.bind(exchange) do |bind_ok|
                 logger.debug "Bound to exchange #{exchange.name}"
-                @queue = queue
-                block.call
+                @declared = true
+                @on_declared.succeed exchange, queue
               end
             end
           end
         end
       end
 
-      def bound?
-        !!@queue
+      def declared?
+        @declared
       end
 
-      def subscribe(&block)
+      def subscribe(queue)
         EM.next_tick do
           # :ack is for message acknowledgement, once confirmed -> call block
-          @queue.subscribe({:ack => true, :confirm => proc { @subscribed = true; block.call }}, &method(:handle_message))
+          on_confirm = proc do
+            @consuming = true
+            @on_consuming.succeed
+          end
+          queue.subscribe({:ack => true, :confirm => on_confirm}, &method(:handle_message))
         end
       end
 
-      def subscribed?
-        @subscribed
-      end
-
-      def subscribed_to?(exchange_name, queue_name)
-        self.exchange_name == exchange_name.to_s && self.queue_name == queue_name
+      def consuming?
+        @consuming
       end
 
       def delete(&block)
-        EM.next_tick do
-          #@exchange.delete
-          logger.debug "Deleting queue #{@queue.name}..."
-          @queue.delete do |delete_ok|
-            logger.debug "Deleted queue #{@queue.name} with #{delete_ok.message_count} messages"
-            @queue = nil
-            block.call
+        @on_declared.callback do |exchange, queue|
+          EM.next_tick do
+            exchange.delete
+            logger.debug "Deleting queue #{queue.name}..."
+            queue.delete do |delete_ok|
+              logger.debug "Deleted queue #{queue.name} with #{delete_ok.message_count} messages"
+              @deleted = true
+              block.call
+            end
           end
         end
       end
 
       def deleted?
-        @queue.nil?
+        @deleted
       end
 
       private

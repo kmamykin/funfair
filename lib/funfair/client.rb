@@ -20,6 +20,7 @@ module Funfair
     end
 
     def connect
+      # need a synchronization here?
       unless @started_connection
         @started_connection = true
         ::AMQP::Utilities::EventLoopHelper.run do
@@ -57,7 +58,7 @@ module Funfair
     end
 
     def pubsub
-      self.connect
+      self.connect # TODO: accessing pubsub property initiates a connection?!?!? rethink
       @pubsub ||= PubSub::PubSub.new(self).tap do |pubsub|
         @config.declare(pubsub)
       end

@@ -2,60 +2,39 @@ module Funfair
   module PubSub
     class Subscribers
       def initialize(session)
-        @subscribers = []
+        @subscriptions = []
         @channel_completion = EventMachine::Completion.new
+        @all_declared = EventMachine::Completion.new
+        @all_consuming = EventMachine::Completion.new
         session.connected { |connection| obtain_subscribing_channel(connection) }
       end
 
-      # TODO: make it
-      # subscription_request = session.subscribe(exchange_name, queue_name, &consumer)
-      # subscription_request.callback{}
-      # subscription_request.errback{}
       def subscribe(exchange_name, queue_name, &handler)
-        @subscribers << Subscriber.new(exchange_name, queue_name, handler)
-      end
-
-      def subscribe?(exchange_name, queue_name)
-        @subscribers.any? { |s| s.subscribed_to?(exchange_name, queue_name) }
-      end
-
-      def all_listening(&block)
-        bind_all do
-          subscribe_all(&block)
+        Subscription.new(exchange_name, queue_name, handler).tap do |subscription|
+          @subscriptions << subscription
+          # attach callbacks to track completion of all subscriptions
+          subscription.on_declared { |exchange, queue| check_all_declared }
+          subscription.on_consuming { check_all_consuming }
+          # Start consuming when channel is ready
+          @channel_completion.callback { |channel| subscription.consume(channel) }
         end
       end
 
-      def bind_all(&block)
-        @channel_completion.callback do |channel|
-          if @subscribers.empty?
-            block.call
-          else
-            @subscribers.each do |s|
-              s.bind(channel) do
-                block.call if all_bound?
-              end
-            end
-          end
-        end
+      # Call block when all exchanges & queues have been declared and bound
+      def on_declared(&block)
+        @all_declared.callback(&block)
       end
 
-      def subscribe_all(&block)
-        if @subscribers.empty?
-          block.call
-        else
-          @subscribers.each do |s|
-            s.subscribe do
-              block.call if all_subscribed?
-            end
-          end
-        end
+      # Call block when all subscriptions are subscribed and consuming messages
+      def on_consuming(&block)
+        @all_consuming.callback(&block)
       end
 
       def delete_all(&block)
-        if @subscribers.empty?
+        if @subscriptions.empty?
           block.call
         else
-          @subscribers.each do |s|
+          @subscriptions.each do |s|
             s.delete do
               block.call if all_deleted?
             end
@@ -77,16 +56,24 @@ module Funfair
         end
       end
 
-      def all_bound?
-        @subscribers.all?(&:bound?)
+      def check_all_declared
+        @all_declared.succeed if all_declared?
       end
 
-      def all_subscribed?
-        @subscribers.all?(&:subscribed?)
+      def check_all_consuming
+        @all_consuming.succeed if all_consuming?
+      end
+
+      def all_declared?
+        @subscriptions.empty? || @subscriptions.all?(&:declared?)
+      end
+
+      def all_consuming?
+        @subscriptions.empty? || @subscriptions.all?(&:consuming?)
       end
 
       def all_deleted?
-        @subscribers.all?(&:deleted?)
+        @subscriptions.empty? || @subscriptions.all?(&:deleted?)
       end
 
       def on_channel_error(channel, channel_close)
