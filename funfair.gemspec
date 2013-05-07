@@ -24,4 +24,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rake"
   spec.add_development_dependency 'rspec', '~> 2.13'
   spec.add_development_dependency 'evented-spec', '~> 0.9'
+  spec.add_development_dependency 'debugger'
 end

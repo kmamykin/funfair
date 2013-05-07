@@ -3,8 +3,8 @@ module Funfair
 
     attr_reader :logger
 
-    def initialize(options)
-      @options = options
+    def initialize(config)
+      @config = config
       @logger = Funfair.logger
       @connected = EventMachine::Completion.new
     end
@@ -24,10 +24,10 @@ module Funfair
         @started_connection = true
         ::AMQP::Utilities::EventLoopHelper.run do
           logger.info "CONNECTING TO AMQP SERVER ..."
-          ::AMQP.connection = ::AMQP.connect(@options.merge({
+          ::AMQP.connection = ::AMQP.connect(@config.connection_options_or_string, {
               :on_tcp_connection_failure => method(:on_tcp_connection_failure),
               :on_possible_authentication_failure => method(:on_possible_authentication_failure)
-          })) do |connection|
+          }) do |connection|
             connection.on_error(&method(:on_connection_error))
             connection.on_tcp_connection_loss(&method(:on_tcp_connection_loss))
             connection.on_connection_interruption(&method(:on_connection_interruption))
@@ -57,12 +57,9 @@ module Funfair
     end
 
     def pubsub
-      @pubsub ||= PubSub.new(self)
-    end
-
-    def close_channel(channel)
-      if channel and channel.open? and channel.connection.open?
-        channel.close
+      self.connect
+      @pubsub ||= PubSub::PubSub.new(self).tap do |pubsub|
+        @config.declare(pubsub)
       end
     end
 
@@ -77,7 +74,7 @@ module Funfair
     end
 
     def on_possible_authentication_failure
-      failure  ="Can not establish connection. Possible authentication failure."
+      failure ="Can not establish connection. Possible authentication failure."
       logger.fatal failure
       @connected.fail :auth_failure, failure
     end

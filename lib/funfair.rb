@@ -4,12 +4,13 @@ require 'amqp/extensions/rabbitmq'
 require 'amqp/utilities/event_loop_helper'
 require "funfair/version"
 require "funfair/configuration"
+require 'funfair/pub_sub/pub_sub'
+require 'funfair/pub_sub/confirmed_publisher'
+require 'funfair/pub_sub/publish_request'
+require 'funfair/pub_sub/subscriber'
+require 'funfair/pub_sub/subscribers'
+require "funfair/subscriber"
 require "funfair/client"
-require 'funfair/pub_sub'
-require 'funfair/confirmed_publisher'
-require 'funfair/publish_request'
-require 'funfair/subscriber'
-require 'funfair/subscribers'
 require 'funfair/worker'
 
 module Funfair
@@ -25,5 +26,9 @@ module Funfair
 
   def self.logger
     configuration.logger
+  end
+
+  def self.client
+    Client.new(self.configuration)
   end
 end

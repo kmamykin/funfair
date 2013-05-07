@@ -2,32 +2,47 @@ require 'spec_helper'
 
 describe Funfair do
   include EventedSpec::SpecHelper
-  default_timeout 20
+  default_timeout 5
 
   before :all do
     Funfair.configure do |config|
+      #config.connection_options_or_string = ''
+      config.namespace = 'test'
       #config.log_level = Logger::DEBUG
     end
   end
 
-  let(:client) { Funfair::Client.new({}) }
+  let(:client) { Funfair.client }
 
-  def event_name(n=nil)
-    base_name = example.description.strip.downcase.tr(' ', '_')
-    n ? "#{base_name}_#{n}" : base_name
-  end
+  describe 'configuration of subscribers' do
+    it 'should declare subscribers for each event' do
+      class Sub1
+        include Funfair::Subscriber
+        on :event1, :event2 do |evt|
+        end
+      end
 
-  def subscriber_queue(n=nil)
-    base_name = example.description.strip.downcase.tr(' ', '_')
-    n ? "#{base_name}_#{n}" : base_name
+      Funfair.configure do |config|
+        config.subscribers = [Sub1]
+      end
+
+      pubsub = double('pubsub')
+      pubsub.should_receive(:subscribe).with('event1', 'test.Sub1.event1')
+      pubsub.should_receive(:subscribe).with('event2', 'test.Sub1.event2')
+      Funfair.configuration.declare(pubsub)
+    end
   end
 
   describe 'pubsub publishing' do
-    it 'should ack one publish requests even without subscribers' do
-      em do
-        pub_request = client.pubsub.publish(event_name, {})
-        pub_request.callback { client.disconnect { done } }
-        pub_request.errback { |message| fail message }
+    it 'should ack publish requests to existing subscribers' do
+       em do
+        client.pubsub.subscribe(event_name, subscriber_queue) do |event_data|
+          event_data.should == 'Called'
+          client.disconnect{ done }
+        end
+        client.pubsub.on_ready do
+          client.pubsub.publish(event_name, 'Called')
+        end
       end
     end
 
@@ -121,4 +136,15 @@ describe Funfair do
       end
     end
   end
+
+  def event_name(n=nil)
+    base_name = example.description.strip.downcase.tr(' ', '_')
+    n ? "#{base_name}_#{n}" : base_name
+  end
+
+  def subscriber_queue(n=nil)
+    base_name = example.description.strip.downcase.tr(' ', '_')
+    n ? "#{base_name}_#{n}" : base_name
+  end
+
 end

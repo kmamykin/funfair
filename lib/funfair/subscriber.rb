@@ -1,73 +1,62 @@
 module Funfair
-  class Subscriber
-    attr_reader :exchange_name, :queue_name, :handler
-    attr_reader :logger
-
-    def initialize(exchange_name, queue_name, handler)
-      @exchange_name, @queue_name, @handler = exchange_name.to_s, queue_name.to_s, handler
-      @logger = Funfair.logger
+  module Subscriber
+    def self.included(base)
+      base.extend DSL
     end
 
-    def bind(channel, &block)
-      EM.next_tick do
-        channel.fanout(exchange_name, :durable => true) do |exchange, declare_ok|
-          @exchange = exchange
-          channel.queue(queue_name, :durable => true) do |queue, declare_ok| # durable queue
-            logger.debug "Subscribing to #{exchange_name} with handler #{queue_name} on channel #{channel.id}"
-            queue.bind(exchange) do |bind_ok|
-              logger.debug "Bound to exchange #{exchange.name}"
-              @queue = queue
-              block.call
-            end
-          end
+    module DSL
+      # define subscriptions
+      def on(*event_names, &handler)
+        event_names.each do |event_name|
+          subscriptions << ClassSubscription.new(self, event_name, &handler)
         end
       end
-    end
 
-    def bound?
-      !!@queue
-    end
-
-    def subscribe(&block)
-      EM.next_tick do
-        # :ack is for message acknowledgement, once confirmed -> call block
-        @queue.subscribe({:ack => true, :confirm => proc { @subscribed = true; block.call }}, &method(:handle_message))
+      # each subscriber has multiple subscriptions
+      def subscriptions
+        @subscriptions ||= []
       end
     end
 
-    def subscribed?
-      @subscribed
-    end
+    class ClassSubscription
 
-    def subscribed_to?(exchange_name, queue_name)
-      self.exchange_name == exchange_name.to_s && self.queue_name == queue_name
-    end
+      def initialize(klass, event_name, &handler)
+        @klass, @event_name, @handler = klass, event_name, handler
+      end
 
-    def delete(&block)
-      EM.next_tick do
-        #@exchange.delete
-        logger.debug "Deleting queue #{@queue.name}..."
-        @queue.delete do |delete_ok|
-          logger.debug "Deleted queue #{@queue.name} with #{delete_ok.message_count} messages"
-          @queue = nil
-          block.call
+      def declare(pubsub)
+        pubsub.subscribe(exchange_name, queue_name, &handler)
+      end
+
+      private
+
+      def exchange_name
+        @event_name.to_s
+      end
+
+      def queue_name
+        handler_id.to_s
+      end
+
+      def handler
+        @handler
+      end
+
+      def handler_id
+        check_namespace!
+
+        [namespace, @klass.name, @event_name].compact.join('.')
+      end
+
+      def check_namespace!
+        unless namespace
+          Funfair.logger.warn "To avoid naming collisions between handlers in different applications, it's strongly advised to set 'Funfair.namespace' to a unique identifier of your application"
         end
       end
-    end
 
-    def deleted?
-      @queue.nil?
-    end
-
-    private
-
-    def handle_message(metadata, data)
-      handler.call data
-      metadata.ack
-    rescue ex
-      # reject and requeue
-      metadata.reject(:requeue => true)
+      def namespace
+        Funfair.configuration.namespace
+      end
     end
   end
-
 end
