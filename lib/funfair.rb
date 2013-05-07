@@ -1,4 +1,5 @@
 require 'logger'
+require 'multi_json'
 require 'amqp'
 require 'amqp/extensions/rabbitmq'
 require 'amqp/utilities/event_loop_helper'

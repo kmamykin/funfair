@@ -13,7 +13,8 @@ module Funfair
       attr_reader :logger
 
       def initialize(publisher, exchange_name, message_data)
-        @publisher, @exchange_name, @message_data = publisher, exchange_name.to_s, message_data
+        @publisher, @exchange_name = publisher, exchange_name.to_s
+        @serialized_data = MultiJson.dump(message_data)
         @timeout = 30 # in sec
         @logger = Funfair.logger
       end
@@ -25,9 +26,9 @@ module Funfair
             channel.fanout(@exchange_name, :durable => true) do |exchange|
               # publisher_index should have been incremented by exchange.publish in channel after_publish callback
               self.tag = channel.publisher_index + 1
-              logger.debug "Publishing message: #{@message_data} to #{exchange.name}"
-              exchange.publish(@message_data, {:persistent => true}) do
-                logger.debug "Message sent: #{@message_data}"
+              logger.debug "Publishing message: #{@serialized_data} to #{exchange.name}"
+              exchange.publish(@serialized_data, {:persistent => true}) do
+                logger.debug "Message sent: #{@serialized_data}"
                 # this is executed on EM.next_tick
                 # and just means that AMQP passed the message to OS, no other guarantees made at this point
 

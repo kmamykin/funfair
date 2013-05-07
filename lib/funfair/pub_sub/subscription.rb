@@ -81,11 +81,13 @@ module Funfair
         EventMachine.defer do
           begin
             logger.debug "Subscriber: got metadata: #{metadata}, data: #{data}"
-            handler.call data
+            deserialized = MultiJson.load(data)
+            handler.call deserialized
             EventMachine.next_tick { metadata.ack }
           rescue Exception => ex
+            logger.error ex.inspect
             # reject and requeue
-            EventMachine.next_tick { metadata.reject(:requeue => true) }
+            EventMachine.next_tick { metadata.reject(:requeue => false) }
           end
         end
       end
