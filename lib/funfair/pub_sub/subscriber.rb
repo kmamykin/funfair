@@ -63,12 +63,16 @@ module Funfair
       private
 
       def handle_message(metadata, data)
-        logger.debug "Subscriber: got metadata: #{metadata}, data: #{data}"
-        handler.call data
-        metadata.ack
-      rescue Exception => ex
-        # reject and requeue
-        metadata.reject(:requeue => true)
+        EventMachine.defer do
+          begin
+            logger.debug "Subscriber: got metadata: #{metadata}, data: #{data}"
+            handler.call data
+            EventMachine.next_tick { metadata.ack }
+          rescue Exception => ex
+            # reject and requeue
+            EventMachine.next_tick { metadata.reject(:requeue => true) }
+          end
+        end
       end
     end
   end
