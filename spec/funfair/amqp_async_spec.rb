@@ -58,6 +58,8 @@ describe Funfair do
 
         p = TestPublisher.new(event_name, 'Called')
         p.execute
+
+        client.pubsub.start
       end
     end
   end
@@ -70,6 +72,7 @@ describe Funfair do
           client.disconnect { done }
         end
         client.pubsub.publish(event_name, 'Called')
+        client.pubsub.start
       end
     end
 
@@ -90,6 +93,7 @@ describe Funfair do
           pub_request.callback &check_if_all_published
           pub_request.errback { |message| fail message }
         end
+        client.pubsub.start
       end
     end
   end
@@ -106,6 +110,7 @@ describe Funfair do
         pub_request = client.pubsub.publish(event_name, "Data")
         pub_request.callback {}
         pub_request.errback { |message| fail message }
+        client.pubsub.start
       end
     end
 
@@ -129,6 +134,7 @@ describe Funfair do
         pub_request = client.pubsub.publish(event_name)
         pub_request.callback {}
         pub_request.errback { |message| fail message }
+        client.pubsub.start
       end
     end
 
@@ -154,6 +160,7 @@ describe Funfair do
           pub_request.callback {}
           pub_request.errback { |message| fail message }
         end
+        client.pubsub.start
       end
     end
   end

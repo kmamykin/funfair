@@ -9,6 +9,7 @@ module Funfair
         session.connected { |connection| obtain_subscribing_channel(connection) }
       end
 
+      # define subscription, but do not start consuming
       def subscribe(exchange_name, queue_name, &handler)
         Subscription.new(exchange_name, queue_name, handler).tap do |subscription|
           @subscriptions << subscription
@@ -16,7 +17,13 @@ module Funfair
           subscription.on_declared { |exchange, queue| check_all_declared }
           subscription.on_consuming { check_all_consuming }
           # Start consuming when channel is ready
-          @channel_completion.callback { |channel| subscription.consume(channel) }
+          @channel_completion.callback { |channel| subscription.declare(channel) }
+        end
+      end
+
+      def start
+        on_declared do
+          @subscriptions.each { |s| s.subscribe }
         end
       end
 

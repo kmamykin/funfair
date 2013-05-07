@@ -17,6 +17,10 @@ module Funfair
         end
       end
 
+      def start
+        subscribers.start
+      end
+
       def on_consuming(&block)
         subscribers.on_consuming(&block)
       end

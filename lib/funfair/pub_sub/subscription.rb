@@ -21,8 +21,7 @@ module Funfair
         @on_consuming.callback(&block)
       end
 
-      def consume(channel)
-        @on_declared.callback{|exchange, queue| self.subscribe(queue) }
+      def declare(channel)
         EM.next_tick do
           channel.fanout(exchange_name, :durable => true) do |exchange, declare_ok|
             channel.queue(queue_name, :durable => true) do |queue, declare_ok| # durable queue
@@ -41,14 +40,16 @@ module Funfair
         @declared
       end
 
-      def subscribe(queue)
-        EM.next_tick do
-          # :ack is for message acknowledgement, once confirmed -> call block
-          on_confirm = proc do
-            @consuming = true
-            @on_consuming.succeed
+      def subscribe
+        @on_declared.callback do |exchange, queue|
+          EM.next_tick do
+            # :ack is for message acknowledgement, once confirmed -> call block
+            on_confirm = proc do
+              @consuming = true
+              @on_consuming.succeed
+            end
+            queue.subscribe({:ack => true, :confirm => on_confirm}, &method(:handle_message))
           end
-          queue.subscribe({:ack => true, :confirm => on_confirm}, &method(:handle_message))
         end
       end
 
